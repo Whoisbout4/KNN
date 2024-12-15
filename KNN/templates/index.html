@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dự Đoán Loại Khách Hàng</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center my-4">Dự Đoán & Phân Tích Loại Khách Hàng</h1>
+
+        <!-- Form Huấn Luyện Mô Hình -->
+        <div class="card">
+            <div class="card-header">
+                <h3>Huấn Luyện Mô Hình</h3>
+            </div>
+            <div class="card-body">
+                <form id="train-form">
+                    <div class="form-group">
+                        <label for="k-value">Nhập giá trị k:</label>
+                        <input type="number" class="form-control" id="k-value" placeholder="Ví dụ: 5" min="1" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Huấn Luyện</button>
+                </form>
+                <div id="train-result" class="alert alert-info mt-3" style="display:none;"></div>
+            </div>
+        </div>
+
+        <hr>
+
+        <!-- Form Dự Đoán với File Upload -->
+        <div class="card">
+            <div class="card-header">
+                <h3>Dự Đoán Loại Khách Hàng</h3>
+            </div>
+            <div class="card-body">
+                <form id="prediction-form" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label for="file">Tải lên file CSV chứa các đặc trưng:</label>
+                        <input type="file" class="form-control" id="file" accept=".csv" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Gửi</button>
+                </form>
+                <h4 class="mt-3">Kết quả Dự Đoán:</h4>
+                <div id="prediction-result" class="alert alert-info" style="display:none;"></div>
+            </div>
+        </div>
+
+        <hr>
+
+        <!-- Phân Tích K -->
+        <div class="card">
+            <div class="card-header">
+                <h3>Phân Tích Ảnh Hưởng của k</h3>
+            </div>
+            <div class="card-body">
+                <button class="btn btn-info" id="k-analysis">Phân Tích</button>
+                <h4 class="mt-3">Biểu Đồ Ảnh Hưởng của k:</h4>
+                <div id="k-analysis-result" class="mt-3" style="display:none;">
+                    <img id="k-analysis-plot" src="" alt="Biểu đồ phân tích k" class="img-fluid" />
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        $(document).ready(function () {
+            // Huấn luyện mô hình
+            $("#train-form").submit(function (event) {
+                event.preventDefault();
+                const kValue = parseInt($("#k-value").val());
+                if (!kValue || kValue <= 0) {
+                    alert("Giá trị k phải là số nguyên dương.");
+                    return;
+                }
+                $.ajax({
+                    url: "/train",
+                    type: "POST",
+                    contentType: "application/json",
+                    data: JSON.stringify({ k: kValue }),
+                    success: function (response) {
+                        $("#train-result").text("Huấn luyện thành công! Độ chính xác: " + response.do_chinh_xac.toFixed(2)).show();
+                    },
+                    error: function (error) {
+                        $("#train-result").text("Đã xảy ra lỗi: " + error.responseJSON.error).show();
+                    }
+                });
+            });
+
+            // Dự đoán từ file
+            $("#prediction-form").submit(function (event) {
+                event.preventDefault();
+                const formData = new FormData();
+                const fileInput = $("#file")[0];
+                if (fileInput.files.length === 0) {
+                    alert("Vui lòng tải lên một file CSV.");
+                    return;
+                }
+                formData.append("file", fileInput.files[0]);
+
+                $.ajax({
+                    url: "/predict",
+                    type: "POST",
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function (response) {
+                        if (response && response.length > 0) {
+                            let resultText = "Kết quả dự đoán: <br><ul>";
+                            response.forEach((item, index) => {
+                                resultText += `<li>Khách hàng ${index + 1}: Nhóm - ${item.predicted_custcat}</li>`;
+                            });
+                            resultText += "</ul>";
+                            $("#prediction-result").html(resultText).show();
+                        } else {
+                            $("#prediction-result").text("Lỗi: " + response.error).show();
+                        }
+                    },
+                    error: function (error) {
+                        $("#prediction-result").text("Đã xảy ra lỗi khi dự đoán.").show();
+                    }
+                });
+            });
+
+            // Phân tích ảnh hưởng của k
+            $("#k-analysis").click(function () {
+                $.ajax({
+                    url: "/k_analysis",
+                    type: "GET",
+                    success: function (response) {
+                        if (response.image) {
+                            $("#k-analysis-plot").attr("src", "data:image/png;base64," + response.image);
+                            $("#k-analysis-result").show();
+                        } else {
+                            alert("Lỗi khi tải phân tích k.");
+                        }
+                    },
+                    error: function (error) {
+                        alert("Đã xảy ra lỗi khi phân tích k.");
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
